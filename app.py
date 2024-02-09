@@ -169,7 +169,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     elem_id="q-input",
                 )
 
-                with gr.Box():
+                with gr.Group():
                     gr.Markdown("**Odpowiedź**")
                     output = gr.Markdown(elem_id="q-output")
                 with gr.Row():
