@@ -176,7 +176,7 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     submit = gr.Button("Wyślij", variant="primary")
                     CHECK_BOX = gr.Checkbox(
                         label="Wyszukaj odpowiedzi w internecie! 🌏 (beta)",
-                        variant="primary",
+                        # variant="primary",
                     )
 
                 with gr.Accordion(label="Zaawansowane Ustawienia", open=False):
