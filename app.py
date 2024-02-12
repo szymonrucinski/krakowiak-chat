@@ -169,14 +169,14 @@ with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
                     elem_id="q-input",
                 )
 
-                with gr.Group():
+                with gr.Box():
                     gr.Markdown("**Odpowiedź**")
                     output = gr.Markdown(elem_id="q-output")
                 with gr.Row():
                     submit = gr.Button("Wyślij", variant="primary")
                     CHECK_BOX = gr.Checkbox(
                         label="Wyszukaj odpowiedzi w internecie! 🌏 (beta)",
-                        # variant="primary",
+                        variant="primary",
                     )
 
                 with gr.Accordion(label="Zaawansowane Ustawienia", open=False):
