@@ -2,24 +2,28 @@ from __future__ import annotations
 from typing import Iterable
 import gradio as gr
 from gradio.themes.base import Base
+from transformers import AutoTokenizer
 from gradio.themes.utils import colors, fonts, sizes
 import subprocess
 import psutil
-from check_sources import construct_prompt_to_use_source
-
+from check_sources import create_prompt_with_source
+import os
 from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
 from llama_cpp import LlamaRAMCache
 
+# Load environment variables
+REPO_ID = os.getenv('REPO_ID', 'szymonrucinski/krakowiak-v2-7b-gguf')
+FILENAME = os.getenv('FILENAME', 'krakowiak-v2-7b-gguf.Q2_K.bin')
+TOKENIZER_NAME = os.getenv('TOKENIZER_NAME', 'mistralai/Mistral-7B-Instruct-v0.1')
+
 hf_hub_download(
-    repo_id="szymonrucinski/krakowiak-v2-7b-gguf",
-    filename="krakowiak-v2-7b-gguf.Q2_K.bin",
+    repo_id=REPO_ID,
+    filename=FILENAME,
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q2_K.bin", n_threads=2, rms_norm_eps=1e-5, n_ctx=512)
-USER_TAG = "### Użytkownik: "
-ASSISTANT_TAG = "### Asystent: "
+llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q2_K.bin", n_threads=-1, rms_norm_eps=1e-5, n_ctx=256)
 # cache = LlamaRAMCache(capacity_bytes=2 << 30)
 
 # llm.set_cache(cache)
@@ -60,17 +64,19 @@ def generate(
     enable_internet_search,
 ):
     if enable_internet_search:
-        prompt = construct_prompt_to_use_source(USER_TAG, ASSISTANT_TAG, instruction)
+        prompt = create_prompt_with_source(instruction)
     else:
-        # prompt = f"{USER_TAG} {instruction} {ASSISTANT_TAG}"
-        prompt = f"<s>[INST] {instruction} [/INST]"
+        tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
+        tokenizer.pad_token = tokenizer.eos_token
+        chat = [ {"role": "user", "content": f"{instruction}"}]
+        prompt = tokenizer.apply_chat_template(chat, tokenize=False)
 
     print(prompt)
 
     result = ""
     for x in llm(
         prompt,
-        stop=[ASSISTANT_TAG],
+        stop=['</s>'],
         stream=True,
         max_tokens=max_new_tokens,
         temperature=temp,
