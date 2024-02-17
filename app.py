@@ -23,7 +23,7 @@ hf_hub_download(
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q2_K.bin", n_threads=4, rms_norm_eps=1e-5, n_ctx=256)
+llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q2_K.bin", n_threads=2, n_ctx=1024)
 # cache = LlamaRAMCache(capacity_bytes=2 << 30)
 
 # llm.set_cache(cache)
@@ -99,7 +99,7 @@ examples = [
 
 
 def process_example(input):
-    for x in generate(input, 256, 0.5, 0.9, 40, 1.2):
+    for x in generate(input, 256, 0.5, 0.9, 40, 1.0):
         pass
     return x
 
