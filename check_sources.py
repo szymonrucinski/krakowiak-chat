@@ -1,119 +1,70 @@
 from googlesearch import search
+from transformers import AutoTokenizer
 import requests
 from bs4 import BeautifulSoup
 import justext
 import re
+import os
+TOKENIZER_NAME = os.getenv('TOKENIZER_NAME', 'mistralai/Mistral-7B-Instruct-v0.1')
 
 
-# scrap results_urls
-def get_html(url):
+def fetch_html(url: str) -> str:
+    """Fetches and returns the HTML content of a given URL."""
     try:
         response = requests.get(url, timeout=5)
-        response.raise_for_status()  # Check for any errors in the HTTP request
-        html_content = response.text  # Get the HTML content
-        return html_content
+        response.raise_for_status()
+        return response.text
     except requests.exceptions.RequestException as e:
-        print(f"Failed to retrieve HTML: {e}")
+        print(f"Error fetching HTML: {e}")
         return ""
 
 
-def remove_html_tags(input):
-    soup = BeautifulSoup(input, "html.parser")
-    text = soup.find_all(text=True)
-
-    output = ""
-    blacklist = [
-        "[document]",
-        "noscript",
-        "header",
-        "html",
-        "meta",
-        "head",
-        "input",
-        "script",
-        "footer",
-        "style",
-        # there may be more elements you don't want, such as "style", etc.
-    ]
-
-    for t in text:
-        if t.parent.name not in blacklist:
-            output += "{} ".format(t)
-
-    return output
-
-
-def condense_newline(text: str) -> str:
-    """Condenses multiple newlines into one newline"""
-    return "\n".join([p for p in re.split("\n|\r", text) if len(p) > 0])
-
-
-def test_removal(html_content: str):
+def clean_html(html_content: str) -> str:
+    """Removes unwanted HTML tags and boilerplate content, returning clean text."""
     try:
-        paragraphs = justext.justext(html_content, justext.get_stoplist("Polish"))
-        new_paragraphs = []
-        for paragraph in paragraphs:
-            if not paragraph.is_boilerplate:
-                new_paragraphs.append(paragraph.text)
-        return condense_newline("\n".join(new_paragraphs))
+        paragraphs = justext.justext(html_content, justext.get_stoplist("English"))
+        text = "\n".join(p.text for p in paragraphs if not p.is_boilerplate)
+        return condense_whitespace(text)
     except Exception as e:
-        print(e)
+        print(f"Error cleaning HTML: {e}")
         return ""
 
 
-def remove_paragraph_containing(text: str, substring: list) -> str:
-    """Removes paragraphs containing any of the substrings"""
-    paragraphs = text.split("\n")
-    new_paragraphs = []
-    for paragraph in paragraphs:
-        if not any(sub in paragraph for sub in substring):
-            new_paragraphs.append(paragraph)
-    return "\n".join(new_paragraphs)
+def condense_whitespace(text: str) -> str:
+    """Reduces multiple whitespaces and newlines to a single space or newline."""
+    return re.sub(r'\s+', ' ', text).strip()
 
 
-def get_data_for_llm(query):
-    results_urls = [
-        result
-        for result in search(query, num=20, stop=20, pause=2)
-        if "pl" in result
-        and not any(
-            domain in result for domain in ["onet", "facebook", "twitter", "pdf"]
-        )
+def filter_paragraphs(text: str, blacklist: list) -> str:
+    """Removes paragraphs containing any blacklisted substring."""
+    return "\n".join(p for p in text.split("\n") if not any(sub in p for sub in blacklist))
+
+
+def fetch_and_clean_data(query: str) -> str:
+    """Fetches HTML content for a query, cleans it, and returns a concatenated string of clean data."""
+    results_urls = [url for url in search(query, num=10, stop=10, pause=2)
+                    if "example.com" not in url]
+
+    html_contents = [fetch_html(url) for url in results_urls]
+    cleaned_texts = [clean_html(html) for html in html_contents if html]
+
+    # Optionally, sort by length or apply further filtering
+    cleaned_texts = sorted(cleaned_texts, key=len)
+
+    final_text = " ".join(cleaned_texts)[:4000]  # Limit to first 4000 characters
+    final_text = final_text.lower()
+    unwanted_phrases = ["comments", "login", "register", "advertisement"]
+    final_text = filter_paragraphs(final_text, unwanted_phrases)
+
+    return final_text
+
+
+def create_prompt_with_source(user_query: str) -> str:
+    """Constructs a prompt with cleaned source data for a given query."""
+    source_data = fetch_and_clean_data(user_query)
+    messages = [
+    {"role": "user", "content": f"Please provide a concise answer to the following question: {user_query}, using only this source material: {source_data}"}
     ]
-
-    html_documents = [get_html(url) for url in results_urls]
-    # clean_html_documents = [remove_html_tags(html).strip() for html in html_documents]
-    clean_html_documents = [
-        f"<DOKUMENT_{i+1}>{test_removal(html)}</DOKUMENT_{i+1}>"
-        for i, html in enumerate(html_documents)
-        if html != ""
-    ]
-    ## sort by length
-    clean_html_documents = sorted(clean_html_documents, key=len, reverse=False)
-    # remove documents shorter than 100 characters
-    clean_html_documents = [doc for doc in clean_html_documents if len(doc) > 100]
-    ## print length of each document
-    for doc in clean_html_documents:
-        print(len(doc))
-    clean_html_documents = "".join(clean_html_documents)
-    # lower case
-    clean_html_documents = clean_html_documents.lower()
-    word_blacklist = [
-        "komentarze",
-        "komentarz",
-        "reklama",
-        "zaloguj",
-        "zarejestruj",
-        "cookies",
-    ]
-    clean_html_documents = remove_paragraph_containing(
-        clean_html_documents, word_blacklist
-    )
-
-    return clean_html_documents[:4000]
-
-
-def construct_prompt_to_use_source(USER_TAG, ASSISTANT_TAG, query):
-    source = get_data_for_llm(query)
-    prompt = f"<s>[INST] Odpowiedz krótko i zwięźle na następujące pytanie: {query} korzystając tylko z tego tekstu źródłowego: {source}. [/INST]"
-    return prompt
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
+    tokenizer.pad_token = tokenizer.eos_token
+    return tokenizer.apply_chat_template(messages, tokenize=False)
