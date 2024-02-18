@@ -12,22 +12,22 @@ from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
 from llama_cpp import LlamaRAMCache
 
-# Load required environment variables with default fallback values
+# Load environment variables
 REPO_ID = os.getenv('REPO_ID', 'szymonrucinski/krakowiak-v2-7b-gguf')
 FILENAME = os.getenv('FILENAME', 'krakowiak-v2-7b-gguf.Q2_K.bin')
 TOKENIZER_NAME = os.getenv('TOKENIZER_NAME', 'mistralai/Mistral-7B-Instruct-v0.1')
 
-# Download the model file from Hugging Face Hub
 hf_hub_download(
     repo_id=REPO_ID,
     filename=FILENAME,
     local_dir=".",
 )
 
-# Initialize the LLaMA model with specified parameters
-llm = Llama(model_path=f"./{FILENAME}", n_threads=2, n_ctx=1024)
+llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q2_K.bin", n_threads=2, rms_norm_eps=1e-5, n_ctx=1024)
+# cache = LlamaRAMCache(capacity_bytes=2 << 30)
 
-# Define the visual theme for the Gradio interface
+# llm.set_cache(cache)
+
 theme = gr.themes.Monochrome(
     primary_hue="orange",
     secondary_hue="red",
@@ -41,42 +41,39 @@ theme = gr.themes.Monochrome(
     ],
 )
 
+
 def get_system_memory():
-    """Fetches and returns system memory usage statistics."""
     memory = psutil.virtual_memory()
     memory_percent = memory.percent
-    memory_used = memory.used / (1024.0**3)  # Convert bytes to GB
-    memory_total = memory.total / (1024.0**3)  # Convert bytes to GB
+    memory_used = memory.used / (1024.0**3)
+    memory_total = memory.total / (1024.0**3)
     return {
         "percent": f"{memory_percent}%",
         "used": f"{memory_used:.3f}GB",
         "total": f"{memory_total:.3f}GB",
     }
 
+
 def generate(
-    instruction: str,
-    max_new_tokens: int,
-    temp: float,
-    top_p: float,
-    top_k: int,
-    rep_penalty: float,
-    enable_internet_search: bool,
+    instruction,
+    max_new_tokens,
+    temp,
+    top_p,
+    top_k,
+    rep_penalty,
+    enable_internet_search,
 ):
-    """Generates a response based on the instruction provided by the user."""
     if enable_internet_search:
-        # Use internet search to construct a prompt
         prompt = create_prompt_with_source(instruction)
     else:
-        # Directly use the instruction as a prompt for the model
         tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
-        tokenizer.pad_token = tokenizer.eos_token  # Ensure padding token is set
-        chat = [{"role": "user", "content": instruction}]
+        tokenizer.pad_token = tokenizer.eos_token
+        chat = [ {"role": "user", "content": f"{instruction}"}]
         prompt = tokenizer.apply_chat_template(chat, tokenize=False)
 
-    print(prompt)  # Debug: Print the prompt
+    print(prompt)
 
     result = ""
-    # Generate response using LLaMA model
     for x in llm(
         prompt,
         stop=['</s>'],
@@ -88,9 +85,9 @@ def generate(
         repeat_penalty=rep_penalty,
     ):
         result += x["choices"][0]["text"]
-        yield result  # Yield the response incrementally
+        yield result
 
-# Predefined example prompts for user convenience
+
 examples = [
     "Jaki obiektyw jest idealny do portretów?",
     "Kiedy powinienem wybrać rower gravelowy a kiedy szosowy?",
@@ -100,17 +97,18 @@ examples = [
     "Mam zamiar aplikować na stanowisko menadżera w firmie. Sformatuj mój życiorys.",
 ]
 
-def process_example(input: str):
-    """Processes an example input by generating a response."""
+
+def process_example(input):
     for x in generate(input, 256, 0.5, 0.9, 40, 1.0):
-        pass  # Iterate through generator to get the last piece
-    return x  # Return the final response
+        pass
+    return x
 
-css = ".generating {visibility: hidden} \n footer {visibility: hidden}"  # Custom CSS for the Gradio interface
 
-# Custom theme class for Gradio interface
+css = ".generating {visibility: hidden} \n footer {visibility: hidden}"
+
+
+# Based on the gradio theming guide and borrowed from https://huggingface.co/spaces/shivi/dolly-v2-demo
 class SeafoamCustom(Base):
-    # Initialization with customized visual properties
     def __init__(
         self,
         *,
@@ -119,12 +117,16 @@ class SeafoamCustom(Base):
         neutral_hue: colors.Color | str = colors.blue,
         spacing_size: sizes.Size | str = sizes.spacing_md,
         radius_size: sizes.Size | str = sizes.radius_md,
-        font: fonts.Font | str | Iterable[fonts.Font | str] = (
+        font: fonts.Font
+        | str
+        | Iterable[fonts.Font | str] = (
             fonts.GoogleFont("Quicksand"),
             "ui-sans-serif",
             "sans-serif",
         ),
-        font_mono: fonts.Font | str | Iterable[fonts.Font | str] = (
+        font_mono: fonts.Font
+        | str
+        | Iterable[fonts.Font | str] = (
             fonts.GoogleFont("IBM Plex Mono"),
             "ui-monospace",
             "monospace",
@@ -139,7 +141,6 @@ class SeafoamCustom(Base):
             font=font,
             font_mono=font_mono,
         )
-        # Set additional visual properties
         super().set(
             button_primary_background_fill="linear-gradient(90deg, *primary_300, *secondary_400)",
             button_primary_background_fill_hover="linear-gradient(90deg, *primary_200, *secondary_300)",
@@ -153,18 +154,117 @@ class SeafoamCustom(Base):
             input_shadow_focus="*shadow_drop_lg",
         )
 
-seafoam = SeafoamCustom()  # Instantiate the custom theme
 
-# Main Gradio Blocks interface setup
+seafoam = SeafoamCustom()
+
 with gr.Blocks(theme=seafoam, analytics_enabled=False, css=css) as demo:
     with gr.Column():
-        gr.Markdown(""" ## 🤖 Krakowiak - Polski model językowy 🤖 \n
-                        ### by [Szymon Ruciński](https://www.szymonrucinski.pl/) \n
-                        Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! 🤗 \n
-                        ***W celu zapewnienia optymalnej wydajności korzystasz z modelu o zredukowanej liczbie parametrów. Jest on 4 razy mniejszy niż oryginalny i generuje odpowiedzi o znacząco niższej jakości.***
-                     """)
+        gr.Markdown(
+            """ ## 🤖 Krakowiak - Polski model językowy 🤖 \n
+                ### by [Szymon Ruciński](https://www.szymonrucinski.pl/) \n
+                Wpisz w poniższe pole i kliknij przycisk, aby wygenerować odpowiedzi na najbardziej nurtujące Cię pytania! 🤗 \n
+                ***W celu zapewnienia optymalnej wydajności korzystasz z modelu o zredukowanej liczbie parametrów. Jest on 4 razy mniejszy niż oryginalny i generuje odpowiedzi o znacząco niższej jakości.***
+            """
+        )
 
-# Final setup and launch of the Gradio app
+        with gr.Row():
+            with gr.Column(scale=3):
+                instruction = gr.Textbox(
+                    placeholder="Tutaj wpisz swoje zapytanie.",
+                    label="Pytanie",
+                    elem_id="q-input",
+                )
+
+                with gr.Box():
+                    gr.Markdown("**Odpowiedź**")
+                    output = gr.Markdown(elem_id="q-output")
+                with gr.Row():
+                    submit = gr.Button("Wyślij", variant="primary")
+                    CHECK_BOX = gr.Checkbox(
+                        label="Wyszukaj odpowiedzi w internecie! 🌏 (beta)",
+                        variant="primary",
+                    )
+
+                with gr.Accordion(label="Zaawansowane Ustawienia", open=False):
+                    MAX_NEW_TOKENS = gr.Slider(
+                        label="Maksymalna liczba nowych tokenów",
+                        minimum=64,
+                        maximum=512,
+                        step=32,
+                        value=512,
+                        interactive=True,
+                    )
+                    TEMP = gr.Slider(
+                        label="Stopień Kreatywności",
+                        minimum=0.0,
+                        maximum=1.0,
+                        step=0.1,
+                        value=0.8,
+                        interactive=True,
+                    )
+                    TOP_P = gr.Slider(
+                        label="Top-P",
+                        minimum=0.05,
+                        maximum=1.0,
+                        step=0.05,
+                        value=0.95,
+                        interactive=True,
+                    )
+                    TOP_K = gr.Slider(
+                        label="Top-K",
+                        minimum=0,
+                        maximum=1000,
+                        step=1,
+                        value=0,
+                        interactive=True,
+                    )
+                    REP_PENALTY = gr.Slider(
+                        label="Repetition penalty",
+                        minimum=1.0,
+                        maximum=2.0,
+                        step=0.05,
+                        value=1.1,
+                        interactive=True,
+                    )
+                gr.Examples(
+                    label="Przykłady",
+                    examples=examples,
+                    inputs=[instruction],
+                    cache_examples=False,
+                    fn=process_example,
+                    outputs=[output],
+                )
+                gr.JSON(get_system_memory, every=1)
+
+    click = submit.click(
+        generate,
+        inputs=[
+            instruction,
+            MAX_NEW_TOKENS,
+            TEMP,
+            TOP_P,
+            TOP_K,
+            REP_PENALTY,
+            CHECK_BOX,
+        ],
+        outputs=[output],
+    )
+    instruction.submit(
+        generate,
+        inputs=[
+            instruction,
+            MAX_NEW_TOKENS,
+            TEMP,
+            TOP_P,
+            TOP_K,
+            REP_PENALTY,
+            CHECK_BOX,
+        ],
+        outputs=[output],
+    )
+# demo.queue(concurrency_count=1, max_size=1).launch(debug=True)
+
+
 if __name__ == "__main__":
     demo.queue(concurrency_count=1, max_size=1)
     demo.launch(server_name="0.0.0.0", server_port=7860, debug=True)
