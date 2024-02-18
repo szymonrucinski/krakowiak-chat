@@ -14,7 +14,7 @@ from llama_cpp import LlamaRAMCache
 
 # Load environment variables
 REPO_ID = os.getenv('REPO_ID', 'szymonrucinski/krakowiak-v2-7b-gguf')
-FILENAME = os.getenv('FILENAME', 'krakowiak-v2-7b-gguf.Q2_K.bin')
+FILENAME = os.getenv('FILENAME', 'szymonrucinski/Krakowiak-7B-v2-GGUF')
 TOKENIZER_NAME = os.getenv('TOKENIZER_NAME', 'mistralai/Mistral-7B-Instruct-v0.1')
 
 hf_hub_download(
