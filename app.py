@@ -11,6 +11,8 @@ import os
 from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
 from llama_cpp import LlamaRAMCache
+from llama_cpp.llama_speculative import LlamaPromptLookupDecoding
+
 
 # Load environment variables
 REPO_ID = os.getenv('REPO_ID', 'szymonrucinski/krakowiak-v2-7b-gguf')
@@ -23,7 +25,7 @@ hf_hub_download(
     local_dir=".",
 )
 
-llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q2_K.bin", n_threads=2, rms_norm_eps=1e-5, n_ctx=1024)
+llm = Llama(model_path="./krakowiak-v2-7b-gguf.Q2_K.bin", n_threads=2, rms_norm_eps=1e-5, n_ctx=1024, draft_model=LlamaPromptLookupDecoding(num_pred_tokens=2))
 # cache = LlamaRAMCache(capacity_bytes=2 << 30)
 
 # llm.set_cache(cache)
