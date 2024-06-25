@@ -66,7 +66,7 @@ def generate(
     if enable_internet_search:
         prompt = create_prompt_with_source(instruction)
     else:
-        tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME)
+        tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_NAME,token=os.getenv('TOKEN'))
         tokenizer.pad_token = tokenizer.eos_token
         chat = [ {"role": "user", "content": f"{instruction}"}]
         prompt = tokenizer.apply_chat_template(chat, tokenize=False)
