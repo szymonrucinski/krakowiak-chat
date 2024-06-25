@@ -1,6 +1,5 @@
 FROM continuumio/miniconda3
 WORKDIR /usr/
-ENV GIT_TOKEN = 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
 ENV REPO_NAME = github.com/szymonrucinski/finetune-llm
 
 RUN apt update && apt install build-essential -y && apt install manpages-dev && apt update
@@ -22,7 +21,7 @@ COPY --chown=user . $HOME/app
 
 COPY . .
 USER root
-RUN curl -L https://huggingface.co/szymonrucinski/krakowiak-7b-gguf/resolve/main/krakowiak-7b.gguf.q4_k_m.bin -o krakowiak-7b.gguf.q4_k_m.bin
+RUN curl -L https://huggingface.co/szymonrucinski/Krakowiak-7B-v2-GGUF/resolve/main/krakowiak-7B-v2-gguf.Q4_0.bin -o krakowiak-7b.gguf.q4_k_m.bin
 USER user
 WORKDIR $HOME/app
 
